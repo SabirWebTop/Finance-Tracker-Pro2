@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Finance Tracker Pro | Ultra Modern</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg: #08090a;
+            --glass: rgba(255, 255, 255, 0.03);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --accent: #00d2ff;
+            --danger: #ff4b5c;
+            --success: #00e676;
+            --text: #ffffff;
+        }
+        body {
+            background-color: var(--bg);
+            background-image: radial-gradient(circle at top right, rgba(0, 210, 255, 0.07), transparent);
+            color: var(--text);
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            margin: 0; padding: 20px;
+            display: flex; justify-content: center; min-height: 100vh;
+        }
+        .container { width: 100%; max-width: 600px; }
+        .header { margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; }
+        .header h1 { font-weight: 600; font-size: 1.5rem; margin: 0; }
+        .chart-container { background: var(--glass); border: 1px solid var(--glass-border); border-radius: 24px; padding: 20px; margin-bottom: 25px; height: 220px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 25px; }
+        .stat-card { background: var(--glass); border: 1px solid var(--glass-border); padding: 15px; border-radius: 18px; text-align: center; }
+        .stat-card label { color: #555; font-size: 0.6rem; text-transform: uppercase; }
+        .stat-card .value { font-size: 1.1rem; font-weight: 600; margin-top: 5px; display: block; }
+        .day-block { background: var(--glass); border: 1px solid var(--glass-border); border-radius: 24px; overflow: hidden; margin-bottom: 15px; transition: transform 0.2s; }
+        .day-header { padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02); border-bottom: 1px solid var(--glass-border); }
+        .day-info h2 { font-size: 1rem; margin: 0; }
+        .day-info span { font-size: 0.75rem; color: rgba(255,255,255,0.4); }
+        .ticket-list { padding: 10px 20px; }
+        .ticket-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.03); }
+        .ticket-item input { background: transparent; border: none; color: var(--accent); font-family: inherit; font-weight: 600; width: 80px; text-align: right; outline: none; }
+        .btn-add-ticket { background: none; border: 1px dashed #333; color: #666; width: 100%; padding: 8px; border-radius: 12px; margin-top: 10px; cursor: pointer; }
+        .btn-delete-ticket { background: none; border: none; color: var(--danger); cursor: pointer; padding: 0 5px; opacity: 0.6; }
+        .btn-delete-ticket:hover { opacity: 1; }
+        .btn-reset { background: none; border: 1px solid rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.6); padding: 5px 12px; border-radius: 8px; font-size: 0.8rem; cursor: pointer; }
+        .balance-val { font-weight: 600; }
+        .positive { color: var(--success); }
+        .negative { color: var(--danger); }
+        .negative-bg { background: rgba(255, 75, 92, 0.05); }
+        .btn-link-sync { background: rgba(0, 210, 255, 0.15); border: 1px solid var(--accent); color: var(--accent); padding: 5px 12px; border-radius: 8px; font-size: 0.8rem; cursor: pointer; font-weight: 600; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>Expense App</h1>
+        <div style="display: flex; gap: 10px;">
+            <button class="btn-link-sync" onclick="generateSyncLink()">🔗 Sincronizar por Enlace</button>
+            <button class="btn-reset" onclick="resetApp()">Reiniciar</button>
+        </div>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card"><label>Gastado</label><span id="total-spent" class="value">0.00€</span></div>
+        <div class="stat-card"><label>Restante</label><span id="total-rem" class="value">140.00€</span></div>
+        <div class="stat-card"><label>Balance</label><span id="global-total" class="value">140.00€</span></div>
+    </div>
+
+    <div class="chart-container"><canvas id="expenseChart"></canvas></div>
+    <div id="days-container"></div>
+</div>
+
+<script>
+    const asignacionDiaria = 20;
+    const fechas = ["28/03", "29/03", "30/03", "31/03", "01/04", "02/04", "03/04"];
+    const nombresDias = ["Sábado", "Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
+    const presupuestoSemanal = asignacionDiaria * fechas.length;
+
+    let expenseChart;
+    let datosSemanales = JSON.parse(localStorage.getItem('misGastosTickets')) || [[],[],[],[],[],[],[]];
+
+    function renderApp() {
+        const container = document.getElementById('days-container');
+        container.innerHTML = '';
+        let saldoArrastrado = 0;
+        let totalGastadoSemana = 0;
+        const totalesDiarios = [];
+
+        fechas.forEach((fecha, i) => {
+            const tickets = datosSemanales[i];
+            const gastoDia = tickets.reduce((a, b) => a + b, 0);
+            totalesDiarios.push(gastoDia);
+            totalGastadoSemana += gastoDia;
+
+            const disponibleHoy = asignacionDiaria + saldoArrastrado;
+            const balanceHoy = disponibleHoy - gastoDia;
+
+            const block = document.createElement('div');
+            block.className = `day-block ${balanceHoy < 0 ? 'negative-bg' : ''}`;
+            block.innerHTML = `
+                <div class="day-header">
+                    <div class="day-info">
+                        <h2>${nombresDias[i]} • ${fecha}</h2>
+                        <span>Disponible: ${disponibleHoy.toFixed(2)}€</span>
+                    </div>
+                    <div class="balance-val ${balanceHoy < 0 ? 'negative' : 'positive'}">${balanceHoy.toFixed(2)}€</div>
+                </div>
+                <div class="ticket-list" id="list-${i}">
+                    ${tickets.map((t, ti) => `
+                        <div class="ticket-item">
+                            <span><button class="btn-delete-ticket" onclick="deleteTicket(${i}, ${ti})">✕</button> Ticket #${ti+1}</span>
+                            <input type="number" step="0.01" value="${t}" onchange="updateTicket(${i}, ${ti}, this.value)">
+                        </div>
+                    `).join('')}
+                    <button class="btn-add-ticket" onclick="addTicket(${i})">+ Ticket</button>
+                </div>
+            `;
+            container.appendChild(block);
+            saldoArrastrado = balanceHoy;
+        });
+
+        document.getElementById('total-spent').innerText = totalGastadoSemana.toFixed(2) + "€";
+        const restante = presupuestoSemanal - totalGastadoSemana;
+        document.getElementById('total-rem').innerText = restante.toFixed(2) + "€";
+        document.getElementById('global-total').innerText = restante.toFixed(2) + "€";
+        
+        updateChart(totalesDiarios);
+        saveData();
+    }
+
+    async function saveData() {
+        localStorage.setItem('misGastosTickets', JSON.stringify(datosSemanales));
+    }
+
+    function addTicket(idx) {
+        datosSemanales[idx].push(0);
+        renderApp();
+    }
+
+    function deleteTicket(dIdx, tIdx) {
+        datosSemanales[dIdx].splice(tIdx, 1);
+        renderApp();
+    }
+
+    function updateTicket(dIdx, tIdx, val) {
+        datosSemanales[dIdx][tIdx] = parseFloat(val) || 0;
+        renderApp();
+    }
+
+    function resetApp() {
+        if(confirm("¿Estás seguro de que quieres reiniciar todos los datos?")) {
+            datosSemanales = [[],[],[],[],[],[],[]];
+            renderApp();
+        }
+    }
+
+    function updateChart(data) {
+        const ctx = document.getElementById('expenseChart').getContext('2d');
+        const colors = data.map(v => v > asignacionDiaria ? 'rgba(255, 75, 92, 0.4)' : 'rgba(0, 210, 255, 0.2)');
+        const borders = data.map(v => v > asignacionDiaria ? '#ff4b5c' : '#00d2ff');
+
+        if (expenseChart) {
+            expenseChart.data.datasets[0].data = data;
+            expenseChart.data.datasets[0].backgroundColor = colors;
+            expenseChart.data.datasets[0].borderColor = borders;
+            expenseChart.update();
+        } else {
+            expenseChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: nombresDias,
+                    datasets: [{
+                        label: 'Gasto Diario',
+                        data: data,
+                        backgroundColor: colors,
+                        borderColor: borders,
+                        borderWidth: 2,
+                        borderRadius: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)', drawBorder: false }, ticks: { color: '#666', font: { size: 10 } } },
+                        x: { grid: { display: false }, ticks: { color: '#666', font: { size: 10 } } }
+                    }
+                }
+            });
+        }
+    }
+
+    // --- SINCRONIZACIÓN POR URL (La forma más sencilla) ---
+    function generateSyncLink() {
+        try {
+            // Convertimos los datos a una cadena codificada
+            const dataString = JSON.stringify(datosSemanales);
+            const encodedData = btoa(unescape(encodeURIComponent(dataString)));
+            const syncUrl = window.location.origin + window.location.pathname + "#sync=" + encodedData;
+            
+            navigator.clipboard.writeText(syncUrl);
+            alert("¡Enlace de sincronización copiado! Envíalo a tu móvil y ábrelo para pasar los datos.");
+        } catch (e) {
+            alert("Error al generar el enlace.");
+        }
+    }
+
+    function checkUrlSync() {
+        const hash = window.location.hash;
+        if (hash.startsWith("#sync=")) {
+            try {
+                const encodedData = hash.replace("#sync=", "");
+                const decodedData = JSON.parse(decodeURIComponent(escape(atob(encodedData))));
+                if (confirm("He detectado datos de otro dispositivo. ¿Quieres importarlos y sobrescribir tus datos actuales?")) {
+                    datosSemanales = decodedData;
+                    renderApp();
+                    window.location.hash = ""; // Limpiar la URL
+                }
+            } catch (e) {
+                console.error("Error en sincronización por URL", e);
+            }
+        }
+    }
+
+    // Llamadas de inicialización para que aparezcan los datos al cargar la página
+    checkUrlSync();
+    renderApp();
+</script>
+</body>
+</html>
