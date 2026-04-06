@@ -21,11 +21,29 @@
             background-image: radial-gradient(circle at top right, rgba(0, 210, 255, 0.07), transparent);
             color: var(--text);
             font-family: 'Plus Jakarta Sans', sans-serif;
-            margin: 0; padding: 20px;
+            margin: 0; padding: 15px;
             display: flex; justify-content: center; min-height: 100vh;
         }
-        .container { width: 100%; max-width: 600px; }
-        .header { margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; }
+        .container { width: 100%; max-width: 1100px; }
+        .main-layout { display: flex; gap: 40px; align-items: flex-start; }
+        .sidebar { flex: 0 0 420px; position: sticky; top: 20px; }
+        .content { flex: 1; }
+
+        @media (max-width: 950px) {
+            .main-layout { flex-direction: column; gap: 20px; }
+            .sidebar { flex: none; width: 100%; position: static; }
+            .content { width: 100%; }
+            .container { max-width: 100%; }
+            .chart-container { height: 180px; }
+        }
+        @media (max-width: 480px) {
+            body { padding: 10px; }
+            .stats-grid { grid-template-columns: 1fr; }
+            .day-header { padding: 12px 15px; }
+            .ticket-list { padding: 10px 15px; }
+        }
+
+        .header { margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
         .header h1 { font-weight: 600; font-size: 1.5rem; margin: 0; }
         .chart-container { background: var(--glass); border: 1px solid var(--glass-border); border-radius: 24px; padding: 20px; margin-bottom: 25px; height: 220px; }
         .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 25px; }
@@ -39,7 +57,7 @@
         .day-info span { font-size: 0.75rem; color: rgba(255,255,255,0.4); }
         .ticket-list { padding: 10px 20px; }
         .ticket-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.03); }
-        .category-picker { display: flex; gap: 8px; margin-right: 10px; }
+        .category-picker { display: flex; gap: 6px; margin-right: 5px; }
         .cat-icon { cursor: pointer; opacity: 0.3; transition: 0.2s; font-size: 1rem; filter: grayscale(1); }
         .cat-icon.active { opacity: 1; filter: grayscale(0); transform: scale(1.2); }
         .ticket-item input { background: transparent; border: none; color: var(--accent); font-family: inherit; font-weight: 600; width: 70px; text-align: right; outline: none; border-bottom: 1px solid transparent; transition: border 0.2s; }
@@ -65,33 +83,38 @@
 </head>
 <body>
 <div class="container">
-    <div class="header">
-        <h1>Gastro Tracker</h1>
-        <div style="display: flex; gap: 10px; align-items: center;">
-            <div class="budget-input-container">
-                <label>Dieta (€):</label>
-                <input type="number" id="daily-budget" value="20" onchange="updateDailyBudget(this.value)">
+    <div class="main-layout">
+        <div class="sidebar">
+            <div class="header">
+                <h1>Gastro Tracker</h1>
+                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                    <div class="budget-input-container">
+                        <label>Dieta (€):</label>
+                        <input type="number" id="daily-budget" value="20" onchange="updateDailyBudget(this.value)">
+                    </div>
+                    <button class="btn-link-sync" onclick="generateSyncLink()">🔗 Sincronizar</button>
+                    <button class="btn-reset" onclick="resetApp()">Reiniciar</button>
+                </div>
             </div>
-            <button class="btn-link-sync" onclick="generateSyncLink()">🔗 Sincronizar por Enlace</button>
-            <button class="btn-reset" onclick="resetApp()">Reiniciar</button>
+
+            <div class="stats-grid">
+                <div class="stat-card"><label>Gastado</label><span id="total-spent" class="value">0.00€</span></div>
+                <div class="stat-card"><label>Restante</label><span id="total-rem" class="value">0.00€</span></div>
+                <div class="stat-card"><label>Balance</label><span id="global-total" class="value">0.00€</span></div>
+            </div>
+
+            <div class="category-summary" id="cat-summary">
+                <div class="cat-stat"><label title="Supermercado">🛒</label><span id="cat-sum-🛒">0€</span></div>
+                <div class="cat-stat"><label title="Frutería">🥦</label><span id="cat-sum-🥦">0€</span></div>
+                <div class="cat-stat"><label title="Pescadería">🐟</label><span id="cat-sum-🐟">0€</span></div>
+                <div class="cat-stat"><label title="Carnicería">🥩</label><span id="cat-sum-🥩">0€</span></div>
+            </div>
+
+            <div class="chart-container"><canvas id="expenseChart"></canvas></div>
         </div>
-    </div>
 
-    <div class="stats-grid">
-        <div class="stat-card"><label>Gastado</label><span id="total-spent" class="value">0.00€</span></div>
-        <div class="stat-card"><label>Restante</label><span id="total-rem" class="value">0.00€</span></div>
-        <div class="stat-card"><label>Balance</label><span id="global-total" class="value">0.00€</span></div>
+        <div class="content" id="days-container"></div>
     </div>
-
-    <div class="category-summary" id="cat-summary">
-        <div class="cat-stat"><label>🛒</label><span id="cat-sum-🛒">0€</span></div>
-        <div class="cat-stat"><label>🍕</label><span id="cat-sum-🍕">0€</span></div>
-        <div class="cat-stat"><label>🛵</label><span id="cat-sum-🛵">0€</span></div>
-        <div class="cat-stat"><label>☕</label><span id="cat-sum-☕">0€</span></div>
-    </div>
-
-    <div class="chart-container"><canvas id="expenseChart"></canvas></div>
-    <div id="days-container"></div>
 </div>
 
 <script>
@@ -128,12 +151,12 @@
         let totalGastadoSemana = 0;
         const totalesDiarios = [];
         const presupuestoSemanal = dailyBudget * 7;
-        const catTotals = { '🛒': 0, '🍕': 0, '🛵': 0, '☕': 0 };
+        const catTotals = { '🛒': 0, '🥦': 0, '🐟': 0, '🥩': 0 };
 
         dateKeys.forEach((dateKey, i) => {
             const tickets = datosSemanales[dateKey] || [];
             const gastoDia = tickets.reduce((acc, t) => {
-                catTotals[t.cat] += (t.val || 0);
+                if (catTotals[t.cat] !== undefined) catTotals[t.cat] += (t.val || 0);
                 return acc + (t.val || 0);
             }, 0);
             totalesDiarios.push(gastoDia);
@@ -159,10 +182,10 @@
                             <div style="display: flex; align-items: center;">
                                 <button class="btn-delete-ticket" onclick="deleteTicket('${dateKey}', ${ti})">✕</button>
                                 <div class="category-picker">
-                                    <span class="cat-icon ${t.cat==='�'?'active':''}" onclick="updateCat('${dateKey}', ${ti}, '🛒')" title="Supermercado">🛒</span>
-                                    <span class="cat-icon ${t.cat==='🍕'?'active':''}" onclick="updateCat('${dateKey}', ${ti}, '🍕')" title="Restaurante">🍕</span>
-                                    <span class="cat-icon ${t.cat==='🛵'?'active':''}" onclick="updateCat('${dateKey}', ${ti}, '🛵')" title="Delivery">🛵</span>
-                                    <span class="cat-icon ${t.cat==='☕'?'active':''}" onclick="updateCat('${dateKey}', ${ti}, '☕')" title="Café / Snacks">☕</span>
+                                    <span class="cat-icon ${t.cat==='🛒'?'active':''}" onclick="updateCat('${dateKey}', ${ti}, '🛒')" title="Supermercado">🛒</span>
+                                    <span class="cat-icon ${t.cat==='🥦'?'active':''}" onclick="updateCat('${dateKey}', ${ti}, '🥦')" title="Frutería">🥦</span>
+                                    <span class="cat-icon ${t.cat==='🐟'?'active':''}" onclick="updateCat('${dateKey}', ${ti}, '🐟')" title="Pescadería">🐟</span>
+                                    <span class="cat-icon ${t.cat==='🥩'?'active':''}" onclick="updateCat('${dateKey}', ${ti}, '🥩')" title="Carnicería">🥩</span>
                                 </div>
                             </div>
                             <input type="number" step="0.01" min="0" value="${t.val}" onchange="updateTicket('${dateKey}', ${ti}, this.value)" onkeyup="handleKeyUp(event, '${dateKey}')">
